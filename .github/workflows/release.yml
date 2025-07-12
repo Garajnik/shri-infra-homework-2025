@@ -1,0 +1,70 @@
+name: Release
+on: [workflow_dispatch]
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm run test
+
+      - id: set_version
+        run: echo "::set-output name=version::${{ github.run_number }}"
+
+      - name: Create release branch
+        run: git checkout -b "releases/${{ steps.set_version.outputs.version }}"
+
+      - name: Login to Yandex CR
+        uses: yc-actions/yc-cr-login@v3
+        with:
+          yc-sa-id: ${{ secrets.YC_SA_ID }}
+
+      - name: Build & push Docker
+        run: |
+          docker build -t cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ steps.set_version.outputs.version }} .
+          docker tag cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ steps.set_version.outputs.version }} cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ steps.set_version.outputs.version }}_latest
+          docker push cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ steps.set_version.outputs.version }}
+          docker push cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ steps.set_version.outputs.version }}_latest
+
+      - name: Create Git tag
+        run: |
+          git tag "${{ steps.set_version.outputs.version }}"
+          git push origin "${{ steps.set_version.outputs.version }}"
+
+      - name: Get commits since last tag
+        id: commits
+        run: |
+          LAST=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) || echo "")
+          echo "::set-output name=commits::$(git log $LAST..HEAD --oneline || git log --oneline)"
+
+      - name: Update CHANGELOG
+        run: |
+          echo "## ${{ steps.set_version.outputs.version }} - $(date +'%Y-%m-%d')" > tmp.md
+          echo "${{ steps.commits.outputs.commits }}" >> tmp.md
+          tail -n +1 CHANGELOG.md >> tmp.md
+          mv tmp.md CHANGELOG.md
+          git commit -am "chore: update CHANGELOG for release ${{ steps.set_version.outputs.version }}"
+          git push origin HEAD:main
+
+      - name: Create Issue with release info
+        uses: peter-evans/create-issue-from-file@v4
+        with:
+          title: "Release ${{ steps.set_version.outputs.version }}"
+          content: |
+            **Date**: $(date)
+            **Author**: ${{ github.actor }}
+            **Version**: ${{ steps.set_version.outputs.version }}
+            **Commits**:
+            ```
+            ${{ steps.commits.outputs.commits }}
+            ```
+            **Docker**: cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ steps.set_version.outputs.version }}

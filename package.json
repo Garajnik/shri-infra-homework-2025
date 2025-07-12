@@ -6,6 +6,8 @@
     "build": "webpack --mode=production --node-env=production",
     "watch": "webpack --watch",
     "test": "jest",
+    "build:docker": "docker build -t shri-infra .",
+    "start:docker": "docker run -p 3000:3000 shri-infra",
     "lint": "eslint ./src"
   },
   "dependencies": {

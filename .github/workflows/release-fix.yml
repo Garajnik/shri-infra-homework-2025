@@ -1,0 +1,59 @@
+name: Release fix
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version'
+        required: true
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: git checkout "releases/${{ github.event.inputs.version }}"
+      - name: Setup Node
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+      - run: npm ci
+      - name: Type-check
+        run: npm run type-check
+      - name: Test
+        run: npm run test
+
+      - name: Build & push Docker fix
+        uses: yc-actions/yc-cr-login@v3
+        with: yc-sa-id: ${{ secrets.YC_SA_ID }}
+      - run: |
+          FIX_NO=${{ github.run_number }}
+          docker build -t cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.event.inputs.version }}_fix$FIX_NO .
+          docker push cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.event.inputs.version }}_fix$FIX_NO
+          docker tag cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.event.inputs.version }}_fix$FIX_NO cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.event.inputs.version }}_latest
+          docker push cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.event.inputs.version }}_latest
+
+      - name: Create fix tag
+        run: |
+          FIX_NO=${{ github.run_number }}
+          git tag "${{ github.event.inputs.version }}_fix${FIX_NO}"
+          git push origin "${{ github.event.inputs.version }}_fix${FIX_NO}"
+
+      - name: Get commits
+        id: commits
+        run: |
+          LAST_TAG=$(git describe --abbrev=0 --tags --match "${{ github.event.inputs.version }}_fix*")
+          echo "::set-output name=commits::$(git log $LAST_TAG..HEAD --oneline)"
+
+      - name: Comment on original Issue
+        uses: peter-evans/create-issue-comment@v3
+        with:
+          issue-number: ${{ github.event.inputs.version }}
+          body: |
+            **Fix deployed**  
+            Date: $(date)  
+            Author: ${{ github.actor }}  
+            Commits:
+            ```
+            ${{ steps.commits.outputs.commits }}
+            ```
+            Docker: cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.event.inputs.version }}_fix${{ github.run_number }}

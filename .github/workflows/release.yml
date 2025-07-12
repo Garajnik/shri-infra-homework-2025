@@ -1,51 +1,70 @@
 name: Release
-
-on:
-  workflow_dispatch:
+on: [workflow_dispatch]
 
 jobs:
-  release:
+  build-and-release:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set_version.outputs.version }}
     steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-    - name: Use Node.js 22
-      uses: actions/setup-node@v2
-      with:
-        node-version: '22'
-    - run: npm ci
-    - run: npm run lint
-    - run: npm run test
-    - name: Create release branch
-      run: git checkout -b releases/${{ github.run_number }}
-    - name: Build Docker image
-      run: npm run build:docker
-    - name: Login to Yandex Cloud Container Registry
-      uses: yc-actions/yc-cr-login@v3
-      with:
-        yc-sa-json-credentials: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
-    - name: Push Docker image
-      env:
-        CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
-        RELEASE_VERSION: ${{ github.run_number }}
-      run: |
-        docker tag shri-infra cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION
-        docker tag shri-infra cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION_latest
-        docker push cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION
-        docker push cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION_latest
-    - name: Create Issue
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        RELEASE_VERSION: ${{ github.run_number }}
-      run: |
-        gh issue create --title "Release $RELEASE_VERSION" --body "Release details..."
-    - name: Update CHANGELOG
-      env:
-        RELEASE_VERSION: ${{ github.run_number }}
-      run: |
-        echo "## [v$RELEASE_VERSION]" >> CHANGELOG.md
-        echo "" >> CHANGELOG.md
-        git add CHANGELOG.md
-        git commit -m "Update CHANGELOG for release $RELEASE_VERSION"
-        git push origin releases/$RELEASE_VERSION
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm run test
+
+      - id: set_version
+        run: echo "::set-output name=version::${{ github.run_number }}"
+
+      - name: Create release branch
+        run: git checkout -b "releases/${{ steps.set_version.outputs.version }}"
+
+      - name: Login to Yandex CR
+        uses: yc-actions/yc-cr-login@v3
+        with:
+          yc-sa-id: ${{ secrets.YC_SA_ID }}
+
+      - name: Build & push Docker
+        run: |
+          docker build -t cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ steps.set_version.outputs.version }} .
+          docker tag cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ steps.set_version.outputs.version }} cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ steps.set_version.outputs.version }}_latest
+          docker push cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ steps.set_version.outputs.version }}
+          docker push cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ steps.set_version.outputs.version }}_latest
+
+      - name: Create Git tag
+        run: |
+          git tag "${{ steps.set_version.outputs.version }}"
+          git push origin "${{ steps.set_version.outputs.version }}"
+
+      - name: Get commits since last tag
+        id: commits
+        run: |
+          LAST=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) || echo "")
+          echo "::set-output name=commits::$(git log $LAST..HEAD --oneline || git log --oneline)"
+
+      - name: Update CHANGELOG
+        run: |
+          echo "## ${{ steps.set_version.outputs.version }} - $(date +'%Y-%m-%d')" > tmp.md
+          echo "${{ steps.commits.outputs.commits }}" >> tmp.md
+          tail -n +1 CHANGELOG.md >> tmp.md
+          mv tmp.md CHANGELOG.md
+          git commit -am "chore: update CHANGELOG for release ${{ steps.set_version.outputs.version }}"
+          git push origin HEAD:main
+
+      - name: Create Issue with release info
+        uses: peter-evans/create-issue-from-file@v4
+        with:
+          title: "Release ${{ steps.set_version.outputs.version }}"
+          content: |
+            **Date**: $(date)
+            **Author**: ${{ github.actor }}
+            **Version**: ${{ steps.set_version.outputs.version }}
+            **Commits**:
+            ```
+            ${{ steps.commits.outputs.commits }}
+            ```
+            **Docker**: cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ steps.set_version.outputs.version }}

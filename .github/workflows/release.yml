@@ -22,7 +22,7 @@ jobs:
     - name: Build Docker image
       run: npm run build:docker
     - name: Login to Yandex Cloud Container Registry
-      uses: yc-actions/yc-cr-login@v1
+      uses: yc-actions/yc-cr-login@v3
       with:
         yc-sa-json-credentials: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
     - name: Push Docker image

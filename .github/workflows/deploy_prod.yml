@@ -1,0 +1,33 @@
+name: Deploy to prod
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version'
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check image exists
+        run: docker pull cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.event.inputs.version }}_latest
+
+      - name: SSH & deploy
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            docker pull cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.event.inputs.version }}_latest
+            docker run -d --rm --name app cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ github.event.inputs.version }}_latest
+
+      - name: Comment on Issue
+        uses: peter-evans/create-issue-comment@v3
+        with:
+          issue-number: ${{ github.event.inputs.version }}
+          body: |
+            🚀 Deployed to production  
+            Date: $(date)  
+            Author: ${{ github.actor }}

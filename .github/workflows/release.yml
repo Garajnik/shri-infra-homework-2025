@@ -95,7 +95,7 @@ jobs:
         git push origin main
 
     - name: Create Issue
-      uses: peter-evans/create-issue@v6
+      uses: peter-evans/create-issue@v3
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         title: "Release ${{ steps.set_version.outputs.version }}"
@@ -107,4 +107,5 @@ jobs:
           ${{ steps.get_commits.outputs.commits }}
           **Docker image**:
           `cr.yandex/${{ secrets.YC_CR_REGISTRY_ID }}/app:${{ steps.set_version.outputs.version }}`
+        labels: release
 

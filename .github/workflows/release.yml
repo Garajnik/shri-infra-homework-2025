@@ -10,7 +10,7 @@ env:
 
 jobs:
   run-ci:
-    uses: ./.github/workflows/ci.yml
+    uses: ./.github/workflows/pr-ci.yml
 
   release:
     needs: run-ci

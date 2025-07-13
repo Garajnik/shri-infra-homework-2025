@@ -1,4 +1,6 @@
 # Домашнее задание ШРИ: Инфраструктура
+## Связь
+tg: [@salfurbrown](https://t.me/salfurbrown)
 
 ## IP-адрес машинки
 ```bash

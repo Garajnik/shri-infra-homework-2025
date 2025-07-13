@@ -44,6 +44,18 @@ jobs:
         RELEASE_VERSION: ${{ github.event.inputs.release_version }}
         FIX_NUMBER: ${{ github.run_number }}
       run: |
-        # Получаем номер issue
+        # Убедиться, что есть полный git history с тегами
+        git fetch --tags
+        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^)
+        COMMITS=$(git log $PREV_TAG..HEAD --pretty=format:'- %h %s' --no-merges)
+        AUTHOR=$(git log -1 --pretty=format:'%an')
+        DATE=$(git log -1 --pretty=format:'%ad' --date=iso)
         ISSUE=$(gh issue list --search "Release ${{ env.RELEASE_VERSION }}" --json number --jq '.[0].number')
-        gh issue comment $ISSUE --body "Fix ${{ env.FIX_NUMBER }} applied"
+        COMMENT="\
+          Fix #${{ env.FIX_NUMBER }} applied  
+          **Date:** $DATE  
+          **Author:** $AUTHOR  
+          
+          **Commits since $PREV_TAG:**  
+          $COMMITS"
+              gh issue comment $ISSUE --body "$COMMENT"

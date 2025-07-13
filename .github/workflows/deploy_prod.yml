@@ -27,7 +27,7 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
             docker pull cr.yandex/${{ secrets.YC_CR_REGISTRY_ID }}/app:${{ github.event.inputs.version }}_latest
-            docker run -p cr.yandex/${{ secrets.YC_CR_REGISTRY_ID }}/app:${{ github.event.inputs.version }}_latest
+            docker run -p 3000:3000 cr.yandex/${{ secrets.YC_CR_REGISTRY_ID }}/app:${{ github.event.inputs.version }}_latest
       - name: Add deploy comment to Issue
         uses: peter-evans/create-or-update-comment@v4
         with:

@@ -11,9 +11,14 @@ jobs:
   fix:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
-        ref: releases/${{ github.event.inputs.release_version }}
+        fetch-depth: 0      
+        fetch-tags: true     
+    - name: Fetch full history to access previous commits/tags
+      run: |
+        git fetch --no-tags
+        git fetch origin '+refs/tags/*:refs/tags/*'
     - name: Use Node.js 22
       uses: actions/setup-node@v2
       with:
@@ -38,24 +43,28 @@ jobs:
         docker tag shri-infra cr.yandex/${{ env.CR_REGISTRY }}/app:${{ env.RELEASE_VERSION }}_latest
         docker push cr.yandex/${{ env.CR_REGISTRY }}/app:${{ env.RELEASE_VERSION }}_fix${{ env.FIX_NUMBER }}
         docker push cr.yandex/${{ env.CR_REGISTRY }}/app:${{ env.RELEASE_VERSION }}_latest
-    - name: Add comment to Issue
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        RELEASE_VERSION: ${{ github.event.inputs.release_version }}
-        FIX_NUMBER: ${{ github.run_number }}
+    - name: Determine commits, author, date
       run: |
-        # Убедиться, что есть полный git history с тегами
-        git fetch --tags
         PREV_TAG=$(git describe --tags --abbrev=0 HEAD^)
         COMMITS=$(git log $PREV_TAG..HEAD --pretty=format:'- %h %s' --no-merges)
         AUTHOR=$(git log -1 --pretty=format:'%an')
         DATE=$(git log -1 --pretty=format:'%ad' --date=iso)
-        ISSUE=$(gh issue list --search "Release ${{ env.RELEASE_VERSION }}" --json number --jq '.[0].number')
-        COMMENT="\
-          Fix #${{ env.FIX_NUMBER }} applied  
-          **Date:** $DATE  
-          **Author:** $AUTHOR  
-          
-          **Commits since $PREV_TAG:**  
-          $COMMITS"
-              gh issue comment $ISSUE --body "$COMMENT"
+        echo "PREV_TAG=$PREV_TAG" >> $GITHUB_ENV
+        echo "COMMITS<<EOF" >> $GITHUB_ENV
+        echo "$COMMITS" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+        echo "AUTHOR=$AUTHOR" >> $GITHUB_ENV
+        echo "DATE=$DATE" >> $GITHUB_ENV
+  
+    - name: Add issue comment
+      env:
+        ISSUE: ${{ steps.<previous>.outputs.issue_number }}
+        FIX_NUMBER: ${{ github.run_number }}
+      run: |
+        COMMENT="Fix #$FIX_NUMBER applied
+        Date: $DATE
+        Author: $AUTHOR
+        
+        Commits since $PREV_TAG:
+            $COMMITS"
+                  gh issue comment $ISSUE --body "$COMMENT"

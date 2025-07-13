@@ -23,7 +23,7 @@ jobs:
       env:
         CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
         RELEASE_VERSION: ${{ github.run_number }}
-      run: docker build -t $CR_REGISTRY/app:$RELEASE_VERSION -t $CR_REGISTRY/app:${RELEASE_VERSION}_latest .
+      run: docker build -t $CR_REGISTRY/app:hello -t $CR_REGISTRY/app:hello_latest .
     - name: Login to Yandex Cloud Container Registry
       env:
         YC_OAUTH_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
@@ -34,7 +34,7 @@ jobs:
         CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
         RELEASE_VERSION: ${{ github.run_number }}
       run: |
-        docker push $CR_REGISTRY/app:$RELEASE_VERSION
+        docker push $CR_REGISTRY/app:hello
         # docker push cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION_latest
     - name: Create Issue
       env:

@@ -1,3 +1,8 @@
+# Release 41 (2025-07-13)
+
+## Commits
+- Update release.yml
+
 # Release 40 (2025-07-13)
 
 ## Commits

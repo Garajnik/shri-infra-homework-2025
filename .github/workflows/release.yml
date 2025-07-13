@@ -36,18 +36,24 @@ jobs:
       run: |
         docker push cr.yandex/${{ env.CR_REGISTRY }}/app:${RELEASE_VERSION}
         docker push cr.yandex/${{ env.CR_REGISTRY }}/app:${RELEASE_VERSION}_latest
-    - name: Create Issue
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        RELEASE_VERSION: ${{ github.run_number }}
-      run: |
-        gh issue create --title "Release $RELEASE_VERSION" --body "Release details..."
     - name: Update CHANGELOG
-      env:
-        RELEASE_VERSION: ${{ github.run_number }}
       run: |
-        echo "## [v$RELEASE_VERSION]" >> CHANGELOG.md
-        echo "" >> CHANGELOG.md
-        git add CHANGELOG.md
-        git commit -m "Update CHANGELOG for release $RELEASE_VERSION"
-        git push origin releases/$RELEASE_VERSION
+        echo "## ${{ steps.set_version.outputs.version }} - $(date +'%Y-%m-%d')" > tmp.md
+        echo "${{ steps.commits.outputs.commits }}" >> tmp.md
+        tail -n +1 CHANGELOG.md >> tmp.md
+        mv tmp.md CHANGELOG.md
+        git commit -am "chore: update CHANGELOG for release ${{ steps.set_version.outputs.version }}"
+        git push origin HEAD:main
+    - name: Create Issue with release info
+      uses: peter-evans/create-issue-from-file@v4
+      with:
+          title: "Release ${{ steps.set_version.outputs.version }}"
+          content: |
+            **Date**: $(date)
+            **Author**: ${{ github.actor }}
+            **Version**: ${{ steps.set_version.outputs.version }}
+            **Commits**:
+            ```
+            ${{ steps.commits.outputs.commits }}
+            ```
+            **Docker**: cr.yandex/${{ secrets.REGISTRY_ID }}/app:${{ steps.set_version.outputs.version }}

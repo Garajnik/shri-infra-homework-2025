@@ -23,12 +23,12 @@ jobs:
       env:
         CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
         RELEASE_VERSION: ${{ github.run_number }}
-      run: docker build -t $CR_REGISTRY/app:hello -t $CR_REGISTRY/app:hello_latest .
+      run: docker build -t ${{ env.CR_REGISTRY }}/app:${{ env.RELEASE_VERSION }} -t ${{ env.CR_REGISTRY }}/app:${{ env.RELEASE_VERSION }}_latest .
     - name: Login to Yandex Cloud Container Registry
       env:
         YC_OAUTH_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
         CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
-      run: echo $YC_OAUTH_TOKEN | docker login --username oauth --password-stdin cr.yandex/$CR_REGISTRY
+      run: echo ${{ env.YC_OAUTH_TOKEN }} | docker login --username oauth --password-stdin cr.yandex/${{ env.CR_REGISTRY }}
     - name: Push Docker image
       env:
         CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}

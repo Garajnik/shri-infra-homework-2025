@@ -1,38 +1,33 @@
-name: Deploy to Production
-
+name: Deploy to prod
 on:
   workflow_dispatch:
     inputs:
-      release_version:
-        description: 'Release version to deploy'
+      version:
+        description: 'Release version'
         required: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
+      - name: Check image exists
+        run: docker pull cr.yandex/${{ secrets.YC_CR_REGISTRY_ID }}/app:${{ github.event.inputs.version }}_latest
 
-    - name: Login to Yandex Cloud Container Registry
-      env:
-        YC_OAUTH_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
-        YC_CR_REGISTRY_ID: ${{ secrets.YC_CR_REGISTRY_ID }}
-      run: echo $YC_OAUTH_TOKEN | docker login --username oauth --password-stdin cr.yandex/$YC_CR_REGISTRY_ID
+      - name: SSH & deploy
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USERNAME }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            docker pull cr.yandex/${{ secrets.YC_CR_REGISTRY_ID }}/app:${{ github.event.inputs.version }}_latest
+            docker run -d --rm --name app cr.yandex/${{ secrets.YC_CR_REGISTRY_ID }}/app:${{ github.event.inputs.version }}_latest
 
-    - name: Deploy to VM
-      env:
-          YC_OAUTH_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
-          YC_CR_REGISTRY_ID: ${{ secrets.YC_CR_REGISTRY_ID }}
-          RELEASE_VERSION: ${{ github.event.inputs.release_version }}
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.VM_HOST }}
-        username: ${{ secrets.VM_USERNAME }}
-        key: ${{ secrets.VM_SSH_KEY }}
-        script: |
-          echo $YC_OAUTH_TOKEN | docker login --username oauth --password-stdin cr.yandex/$YC_CR_REGISTRY_ID
-          docker pull cr.yandex/$YC_CR_REGISTRY_ID/app:$RELEASE_VERSION_latest
-          docker stop app || true
-          docker rm app || true
-          docker run -d -p 3000:3000 --name app cr.yandex/$YC_CR_REGISTRY_ID/app:$RELEASE_VERSION_latest
+      - name: Comment on Issue
+        uses: peter-evans/create-issue-comment@v3
+        with:
+          issue-number: ${{ github.event.inputs.version }}
+          body: |
+            🚀 Deployed to production  
+            Date: $(date)  
+            Author: ${{ github.actor }}

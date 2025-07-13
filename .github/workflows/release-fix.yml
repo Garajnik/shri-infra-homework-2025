@@ -44,4 +44,4 @@ jobs:
         RELEASE_VERSION: ${{ github.event.inputs.release_version }}
         FIX_NUMBER: ${{ github.run_number }}
       run: |
-        gh issue comment "Release ${{ env.RELEASE_VERSION }}" --body "Fix ${{ env.FIX_NUMBER }} applied"
+        gh issue comment ${{ github.event.inputs.release_version }} --body "Fix ${{ env.FIX_NUMBER }} applied"

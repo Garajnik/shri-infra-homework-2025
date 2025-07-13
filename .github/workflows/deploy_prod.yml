@@ -11,6 +11,15 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Login to Yandex Cloud Container Registry
+      env:
+        YC_OAUTH_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
+        YC_CR_REGISTRY_ID: ${{ secrets.YC_CR_REGISTRY_ID }}
+      run: echo $YC_OAUTH_TOKEN | docker login --username oauth --password-stdin cr.yandex/$YC_CR_REGISTRY_ID
+
     - name: Deploy to VM
       uses: appleboy/ssh-action@master
       with:
@@ -18,11 +27,11 @@ jobs:
         username: ${{ secrets.VM_USERNAME }}
         key: ${{ secrets.VM_SSH_KEY }}
         env:
-          YC_SA_JSON_CREDENTIALS: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
+          YC_OAUTH_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
           YC_CR_REGISTRY_ID: ${{ secrets.YC_CR_REGISTRY_ID }}
           RELEASE_VERSION: ${{ github.event.inputs.release_version }}
         script: |
-          echo $YC_SA_JSON_CREDENTIALS | docker login --username oauth2accesstoken --password-stdin cr.yandex/$YC_CR_REGISTRY_ID
+          echo $YC_OAUTH_TOKEN | docker login --username oauth --password-stdin cr.yandex/$YC_CR_REGISTRY_ID
           docker pull cr.yandex/$YC_CR_REGISTRY_ID/app:$RELEASE_VERSION_latest
           docker stop app || true
           docker rm app || true

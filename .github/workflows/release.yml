@@ -3,82 +3,51 @@ name: Release
 on:
   workflow_dispatch:
 
-env:
-  REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
-  IMAGE_NAME: app
-  VERSION: ${{ github.run_number }}
-
 jobs:
-  run-ci:
-    uses: ./.github/workflows/pr-ci.yml
-
   release:
-    needs: run-ci
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout main
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-
-      - name: Set up Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Create release branch
-        run: |
-          git checkout -b releases/${{ env.VERSION }}
-          git push origin releases/${{ env.VERSION }}
-
-      - name: Get previous tag
-        id: prev
-        run: |
-          TAG=$(git tag --sort=-creatordate | grep -E '^[0-9]+$' | head -n 1)
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Get commit log
-        id: commits
-        run: |
-          git fetch --tags
-          LOG=$(git log ${{ steps.prev.outputs.tag }}..HEAD --pretty=format:"- %s (%an)" || echo "no previous tag")
-          echo "log<<EOF" >> $GITHUB_OUTPUT
-          echo "$LOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Build and push Docker image
-        env:
-          YC_OAUTH: ${{ secrets.YC_OAUTH_TOKEN }}
-        run: |
-          echo "$YC_OAUTH" | docker login --username oauth --password-stdin cr.yandex
-          docker build -t $REGISTRY/$IMAGE_NAME:$VERSION -t $REGISTRY/$IMAGE_NAME:${VERSION}_latest .
-          docker push $REGISTRY/$IMAGE_NAME:$VERSION
-          docker push $REGISTRY/$IMAGE_NAME:${VERSION}_latest
-
-      - name: Create Git tag
-        run: |
-          git tag $VERSION
-          git push origin $VERSION
-
-      - name: Create GitHub Issue
-        uses: peter-evans/create-issue-from-file@v5
-        with:
-          title: "Release $VERSION"
-          content-filepath: .github/.release-issue.md
-          labels: release
-
-      - name: Update CHANGELOG.md
-        run: |
-          echo "## $VERSION - $(date +'%Y-%m-%d')" > .changelog.tmp
-          echo "${{ steps.commits.outputs.log }}" >> .changelog.tmp
-          echo "" >> .changelog.tmp
-          cat CHANGELOG.md >> .changelog.tmp
-          mv .changelog.tmp CHANGELOG.md
-
-      - name: Commit CHANGELOG
-        run: |
-          git add CHANGELOG.md
-          git commit -m "update changelog for v$VERSION"
-          git push origin HEAD:releases/${{ env.VERSION }}
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Use Node.js 22
+      uses: actions/setup-node@v2
+      with:
+        node-version: '22'
+    - run: npm ci
+    - run: npm run lint
+    - run: npm run test
+    - name: Create release branch
+      run: git checkout -b releases/${{ github.run_number }}
+    - name: Build Docker image
+      env:
+        CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
+        RELEASE_VERSION: ${{ github.run_number }}
+      run: docker build -t $CR_REGISTRY/app:$RELEASE_VERSION -t $CR_REGISTRY/app:${RELEASE_VERSION}_latest .
+    - name: Login to Yandex Cloud Container Registry
+      env:
+        YC_OAUTH_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
+        CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
+      run: echo $YC_OAUTH_TOKEN | docker login --username oauth --password-stdin cr.yandex/$CR_REGISTRY
+    - name: Push Docker image
+      env:
+        CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
+        RELEASE_VERSION: ${{ github.run_number }}
+      run: |
+        docker push $CR_REGISTRY/app:$RELEASE_VERSION
+        # docker push cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION_latest
+    - name: Create Issue
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RELEASE_VERSION: ${{ github.run_number }}
+      run: |
+        gh issue create --title "Release $RELEASE_VERSION" --body "Release details..."
+    - name: Update CHANGELOG
+      env:
+        RELEASE_VERSION: ${{ github.run_number }}
+      run: |
+        echo "## [v$RELEASE_VERSION]" >> CHANGELOG.md
+        echo "" >> CHANGELOG.md
+        git add CHANGELOG.md
+        git commit -m "Update CHANGELOG for release $RELEASE_VERSION"
+        git push origin releases/$RELEASE_VERSION

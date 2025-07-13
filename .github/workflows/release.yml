@@ -20,22 +20,36 @@ jobs:
     - name: Create release branch
       run: git checkout -b releases/${{ github.run_number }}
     - name: Build Docker image
+      run: npm run build:docker
+    - name: List Docker images
+      run: docker images
+    - name: Install jq
+      run: sudo apt-get update && sudo apt-get install -y jq
+    - name: Get IAM Token
       env:
-        CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
-        RELEASE_VERSION: ${{ github.run_number }}
-      run: docker build -t $CR_REGISTRY/app:$RELEASE_VERSION -t $CR_REGISTRY/app:${RELEASE_VERSION}_latest .
+        YC_SA_JSON_CREDENTIALS: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
+      run: |
+        IAM_TOKEN=$(curl -s -H "Metadata-Flavor: Google" -d "$YC_SA_JSON_CREDENTIALS" https://iam.api.cloud.yandex.net/iam/v1/tokens | jq -r '.iamToken')
+        echo "IAM_TOKEN=$IAM_TOKEN" >> $GITHUB_ENV
     - name: Login to Yandex Cloud Container Registry
       env:
-        YC_OAUTH_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
         CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
-      run: echo $YC_OAUTH_TOKEN | docker login --username oauth --password-stdin cr.yandex/$CR_REGISTRY
+        IAM_TOKEN: ${{ env.IAM_TOKEN }}
+      run: echo $IAM_TOKEN | docker login --username iam --password-stdin cr.yandex/$CR_REGISTRY
     - name: Push Docker image
       env:
         CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
         RELEASE_VERSION: ${{ github.run_number }}
       run: |
-        docker push $CR_REGISTRY/app:$RELEASE_VERSION
-        # docker push cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION_latest
+        if docker image inspect shri-infra >/dev/null 2>&1; then
+          docker tag shri-infra cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION
+          docker tag shri-infra cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION_latest
+          docker push cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION
+          docker push cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION_latest
+        else
+          echo "Error: Docker image shri-infra does not exist"
+          exit 1
+        fi
     - name: Create Issue
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

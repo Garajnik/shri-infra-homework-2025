@@ -9,39 +9,102 @@ jobs:
     steps:
     - uses: actions/checkout@v2
       with:
-        fetch-depth: 0
+        fetch-depth: 0  # нужно для tag/history
+
     - name: Use Node.js 22
       uses: actions/setup-node@v2
       with:
         node-version: '22'
+
     - run: npm ci
     - run: npm run lint
     - run: npm run test
+
+    - name: Set version
+      id: set_version
+      run: |
+        echo "::set-output name=version::${{ github.run_number }}"
+
     - name: Create release branch
-      run: git checkout -b releases/${{ github.run_number }}
+      run: |
+        git checkout main
+        git pull
+        git checkout -b "releases/${{ steps.set_version.outputs.version }}"
+
     - name: Build Docker image
       env:
         CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
-        RELEASE_VERSION: ${{ github.run_number }}
-      run: docker build -t cr.yandex/${{ env.CR_REGISTRY }}/app:${{ env.RELEASE_VERSION }} -t cr.yandex/${{ env.CR_REGISTRY }}/app:${{ env.RELEASE_VERSION }}_latest .
-    - name: Login to Yandex Cloud Container Registry
+        RELEASE_VERSION: ${{ steps.set_version.outputs.version }}
+      run: |
+        docker build \
+          -t cr.yandex/${CR_REGISTRY}/app:${RELEASE_VERSION} \
+          -t cr.yandex/${CR_REGISTRY}/app:${RELEASE_VERSION}_latest .
+
+    - name: Login to Yandex CR
       env:
         YC_OAUTH_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
         CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
-      run: echo ${{ env.YC_OAUTH_TOKEN }} | docker login --username oauth --password-stdin cr.yandex/${{ env.CR_REGISTRY }}
+      run: |
+        echo "${YC_OAUTH_TOKEN}" \
+          | docker login --username oauth --password-stdin \
+            cr.yandex/${CR_REGISTRY}
+
     - name: Push Docker image
       env:
         CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
-        RELEASE_VERSION: ${{ github.run_number }}
+        RELEASE_VERSION: ${{ steps.set_version.outputs.version }}
       run: |
-        docker push cr.yandex/${{ env.CR_REGISTRY }}/app:${RELEASE_VERSION}
-        docker push cr.yandex/${{ env.CR_REGISTRY }}/app:${RELEASE_VERSION}_latest
-    - name: Create Issue with release info
-      uses: peter-evans/create-issue-from-file@v4
+        docker push cr.yandex/${CR_REGISTRY}/app:${RELEASE_VERSION}
+        docker push cr.yandex/${CR_REGISTRY}/app:${RELEASE_VERSION}_latest
+
+    - name: Tag release commit
+      uses: actions/github-script@v5
+      with:
+        script: |
+          const v = '${{ steps.set_version.outputs.version }}';
+          const sha = (await github.rest.repos.getBranch({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            branch: 'main'
+          })).data.commit.sha;
+          await github.rest.git.createRef({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: `refs/tags/${v}`,
+            sha
+          });
+
+    - name: Get commits since last tag
+      id: get_commits
+      run: |
+        git fetch --tags
+        LAST=$(git describe --tags --abbrev=0)
+        git log $LAST..HEAD --pretty=format:'- %h %s' > release_commits.txt
+        echo "::set-output name=commits::$(cat release_commits.txt)"
+
+    - name: Prepend CHANGELOG
+      run: |
+        VER=${{ steps.set_version.outputs.version }}
+        DATE=$(date +'%Y-%m-%d')
+        printf "## %s – %s\n%s\n\n" "$VER" "$DATE" "${{ steps.get_commits.outputs.commits }}" > tmp.md
+        cat CHANGELOG.md >> tmp.md
+        mv tmp.md CHANGELOG.md
+        git checkout main
+        git add CHANGELOG.md
+        git commit -m "chore: update CHANGELOG for release $VER"
+        git push origin main
+
+    - name: Create Issue
+      uses: peter-evans/create-issue@v6
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         title: "Release ${{ steps.set_version.outputs.version }}"
-        content-filepath: CHANGELOG.md
-        labels: |
-          release
+        body: |
+          **Date**: $(date +'%Y-%m-%d')
+          **Author**: ${{ github.actor }}
+          **Version**: ${{ steps.set_version.outputs.version }}
+          **Commits:**
+          ${{ steps.get_commits.outputs.commits }}
+          **Docker image**:
+          `cr.yandex/${{ secrets.YC_CR_REGISTRY_ID }}/app:${{ steps.set_version.outputs.version }}`
 

@@ -21,15 +21,15 @@ jobs:
       run: echo $YC_OAUTH_TOKEN | docker login --username oauth --password-stdin cr.yandex/$YC_CR_REGISTRY_ID
 
     - name: Deploy to VM
+      env:
+          YC_OAUTH_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
+          YC_CR_REGISTRY_ID: ${{ secrets.YC_CR_REGISTRY_ID }}
+          RELEASE_VERSION: ${{ github.event.inputs.release_version }}
       uses: appleboy/ssh-action@master
       with:
         host: ${{ secrets.VM_HOST }}
         username: ${{ secrets.VM_USERNAME }}
         key: ${{ secrets.VM_SSH_KEY }}
-        env:
-          YC_OAUTH_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
-          YC_CR_REGISTRY_ID: ${{ secrets.YC_CR_REGISTRY_ID }}
-          RELEASE_VERSION: ${{ github.event.inputs.release_version }}
         script: |
           echo $YC_OAUTH_TOKEN | docker login --username oauth --password-stdin cr.yandex/$YC_CR_REGISTRY_ID
           docker pull cr.yandex/$YC_CR_REGISTRY_ID/app:$RELEASE_VERSION_latest

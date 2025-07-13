@@ -28,7 +28,7 @@ jobs:
       run: |
           echo "$YC_OAUTH" | docker login --username oauth --password-stdin cr.yandex
           docker build -t $CR_REGISTRY/$IMAGE_NAME:$RELEASE_VERSION -t $CR_REGISTRY/$IMAGE_NAME:${RELEASE_VERSION}_latest .
-          # docker push $CR_REGISTRY/$IMAGE_NAME:$RELEASE_VERSION
+          docker push $CR_REGISTRY/$IMAGE_NAME:$RELEASE_VERSION
           # docker push $CR_REGISTRY/$IMAGE_NAME:${RELEASE_VERSION}_latest
     - name: Create Issue
       env:

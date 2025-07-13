@@ -17,8 +17,41 @@ jobs:
     - run: npm ci
     - run: npm run lint
     - run: npm run test
-    - name: Create release branch
-      run: git checkout -b releases/${{ github.run_number }}
+    - name: Get latest tag
+      id: get_latest_tag
+      run: |
+        LATEST_TAG=$(git tag --sort=-committerdate | head -n 1 || echo "")
+        echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
+    - name: Get commit list
+      id: get_commits
+      run: |
+        if [ -n "${{ env.LATEST_TAG }}" ]; then
+          COMMITS=$(git log ${{ env.LATEST_TAG }}..HEAD --pretty="- %s")
+        else
+          COMMITS=$(git log --pretty="- %s")
+        fi
+        echo "COMMITS<<EOF" >> $GITHUB_ENV
+        echo "$COMMITS" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+    - name: Update CHANGELOG.md
+      run: |
+        touch CHANGELOG.md
+        echo "# Release ${{ github.run_number }} ($(date +'%Y-%m-%d'))" > temp_changelog.md
+        echo "" >> temp_changelog.md
+        echo "## Commits" >> temp_changelog.md
+        echo "${{ env.COMMITS }}" >> temp_changelog.md
+        echo "" >> temp_changelog.md
+        cat CHANGELOG.md >> temp_changelog.md
+        mv temp_changelog.md CHANGELOG.md
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git add CHANGELOG.md
+        git commit -m "Update CHANGELOG.md for release ${{ github.run_number }}" || echo "No changes to commit"
+        git push origin ${{ github.ref }}
+    - name: Create tag
+      run: |
+        git tag ${{ github.run_number }}
+        git push origin ${{ github.run_number }}
     - name: Build Docker image
       env:
         CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
@@ -36,45 +69,6 @@ jobs:
       run: |
         docker push cr.yandex/${{ env.CR_REGISTRY }}/app:${{ env.RELEASE_VERSION }}
         docker push cr.yandex/${{ env.CR_REGISTRY }}/app:${{ env.RELEASE_VERSION }}_latest
-    - name: Get latest tag
-      id: get_latest_tag
-      run: |
-        LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^[0-9]+$' | head -n 1 || echo "")
-        echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
-    - name: Get commit list
-      id: get_commits
-      run: |
-        if [ -n "${{ env.LATEST_TAG }}" ]; then
-          COMMITS=$(git log ${{ env.LATEST_TAG }}..HEAD --pretty=%s)
-        else
-          COMMITS=$(git log --pretty=%s)
-        fi
-        echo "COMMITS<<EOF" >> $GITHUB_ENV
-        echo "$COMMITS" >> $GITHUB_ENV
-        echo "EOF" >> $GITHUB_ENV
-    - name: Create tag
-      run: |
-        git tag ${{ github.run_number }}
-        git push origin ${{ github.run_number }}
-    - name: Update CHANGELOG.md
-      run: |
-        touch CHANGELOG.md
-        echo "# Release ${{ github.run_number }} ($(date +'%Y-%m-%d'))" > temp_changelog.md
-        echo "" >> temp_changelog.md
-        echo "## Commits" >> temp_changelog.md
-        echo "${{ env.COMMITS }}" >> temp_changelog.md
-        echo "" >> temp_changelog.md
-        cat CHANGELOG.md >> temp_changelog.md
-        mv temp_changelog.md CHANGELOG.md
-        git config user.name "GitHub Actions"
-        git config user.email "actions@github.com"
-        git add CHANGELOG.md
-        git commit -m "Update CHANGELOG.md for release ${{ github.run_number }}" || echo "No changes to commit"
-        git push origin releases/${{ github.run_number }}
-    - name: Debug CHANGELOG.md
-      run: |
-        echo "CHANGELOG.md content:"
-        cat CHANGELOG.md
     - name: Generate release info
       run: |
         echo "# Release ${{ github.run_number }}" > release_info.md
@@ -87,10 +81,6 @@ jobs:
         echo "" >> release_info.md
         echo "## Commits" >> release_info.md
         echo "${{ env.COMMITS }}" >> release_info.md
-    - name: Debug release_info.md
-      run: |
-        echo "release_info.md content:"
-        cat release_info.md
     - name: Create Issue with release info
       uses: peter-evans/create-issue-from-file@v4
       with:

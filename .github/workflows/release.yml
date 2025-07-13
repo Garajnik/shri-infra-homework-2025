@@ -28,12 +28,14 @@ jobs:
     - name: Push Docker image
       env:
         CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
+        IMAGE_NAME: app
+        YC_OAUTH: ${{ secrets.YC_OAUTH }}
         RELEASE_VERSION: ${{ github.run_number }}
       run: |
-        docker tag shri-infra cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION
-        docker tag shri-infra cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION_latest
-        docker push cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION
-        docker push cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION_latest
+          echo "$YC_OAUTH" | docker login --username oauth --password-stdin cr.yandex
+          docker build -t $CR_REGISTRY/$IMAGE_NAME:$RELEASE_VERSION -t $CR_REGISTRY/$IMAGE_NAME:${RELEASE_VERSION}_latest .
+          docker push $CR_REGISTRY/$IMAGE_NAME:$RELEASE_VERSION
+          docker push $CR_REGISTRY/$IMAGE_NAME:${RELEASE_VERSION}_latest
     - name: Create Issue
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

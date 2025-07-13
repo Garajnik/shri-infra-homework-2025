@@ -24,7 +24,7 @@ jobs:
     - name: Build Docker image
       env:
         CR_REGISTRY: ${{ secrets.YC_CR_REGISTRY_ID }}
-        RELEASE_VERSION: ${{ github.run_number }}
+        RELEASE_VERSION: ${{ github.event.inputs.release_version }}
         FIX_NUMBER: ${{ github.run_number }}
       run: docker build -t cr.yandex/${{ env.CR_REGISTRY }}/app:${{ env.RELEASE_VERSION }}_fix${{ env.FIX_NUMBER }} -t cr.yandex/${{ env.CR_REGISTRY }}/app:${{ env.RELEASE_VERSION }}_latest .
     - name: Login to Yandex Cloud Container Registry

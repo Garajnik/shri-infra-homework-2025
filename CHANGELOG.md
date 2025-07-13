@@ -1,3 +1,8 @@
+# Release 45 (2025-07-13)
+
+## Commits
+- Add npm run build to Dockerfile
+
 # Release 42 (2025-07-13)
 
 ## Commits

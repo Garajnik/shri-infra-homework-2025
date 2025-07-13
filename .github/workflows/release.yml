@@ -89,3 +89,5 @@ jobs:
         content-filepath: ./release_info.md
         labels: |
           release
+    - name: Create release branch
+      run: git checkout -b releases/${{ github.run_number }}

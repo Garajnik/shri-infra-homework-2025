@@ -39,7 +39,7 @@ jobs:
     - name: Get latest tag
       id: get_latest_tag
       run: |
-        LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || echo "")
+        LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^[0-9]+$' | head -n 1 || echo "")
         echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
     - name: Get commit list
       id: get_commits
@@ -58,6 +58,7 @@ jobs:
         git push origin ${{ github.run_number }}
     - name: Update CHANGELOG.md
       run: |
+        touch CHANGELOG.md
         echo "# Release ${{ github.run_number }} ($(date +'%Y-%m-%d'))" > temp_changelog.md
         echo "" >> temp_changelog.md
         echo "## Commits" >> temp_changelog.md
@@ -68,16 +69,12 @@ jobs:
         git config user.name "GitHub Actions"
         git config user.email "actions@github.com"
         git add CHANGELOG.md
-        git commit -m "Update CHANGELOG.md for release ${{ github.run_number }}"
+        git commit -m "Update CHANGELOG.md for release ${{ github.run_number }}" || echo "No changes to commit"
         git push origin releases/${{ github.run_number }}
-    - name: Create Issue with release info
-      uses: peter-evans/create-issue-from-file@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        title: "Release ${{ github.run_number }}"
-        content-filepath: ./release_info.md
-        labels: |
-          release
+    - name: Debug CHANGELOG.md
+      run: |
+        echo "CHANGELOG.md content:"
+        cat CHANGELOG.md
     - name: Generate release info
       run: |
         echo "# Release ${{ github.run_number }}" > release_info.md
@@ -90,3 +87,15 @@ jobs:
         echo "" >> release_info.md
         echo "## Commits" >> release_info.md
         echo "${{ env.COMMITS }}" >> release_info.md
+    - name: Debug release_info.md
+      run: |
+        echo "release_info.md content:"
+        cat release_info.md
+    - name: Create Issue with release info
+      uses: peter-evans/create-issue-from-file@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        title: "Release ${{ github.run_number }}"
+        content-filepath: ./release_info.md
+        labels: |
+          release

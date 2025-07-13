@@ -22,12 +22,14 @@ jobs:
           script: |
             docker pull cr.yandex/${{ secrets.YC_CR_REGISTRY_ID }}/app:${{ github.event.inputs.version }}_latest
             docker run -d --rm --name app cr.yandex/${{ secrets.YC_CR_REGISTRY_ID }}/app:${{ github.event.inputs.version }}_latest
-
-      - name: Comment on Issue
-        uses: peter-evans/create-issue-comment@v3
+      - name: Add deploy comment to Issue
+        uses: peter-evans/create-or-update-comment@v4
         with:
-          issue-number: ${{ github.event.inputs.version }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ inputs.version }}     # номер релизной Issue, аналог версии
           body: |
-            🚀 Deployed to production  
-            Date: $(date)  
-            Author: ${{ github.actor }}
+            🚀 **Deployed to production**
+            **Date**: $(date +'%Y-%m-%d')
+            **Author**: ${{ github.actor }}
+            **Docker image**: `cr.yandex/${{ secrets.YC_CR_REGISTRY_ID }}/app:${{ inputs.version }}_latest`
+

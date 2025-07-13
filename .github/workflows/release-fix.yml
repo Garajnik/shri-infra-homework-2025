@@ -53,7 +53,7 @@ jobs:
         git fetch --tags
         PREV_TAG=$(git describe --tags --abbrev=0 HEAD^)
         COMMITS=$(git log $PREV_TAG..HEAD --pretty=format:'- %h %s' --no-merges)
-        AUTHOR=$(git log -1 --pretty=format:'%an')
+        AUTHOR=${{ github.actor }}
         DATE=$(git log -1 --pretty=format:'%ad' --date=iso)
         ISSUE=$(gh issue list --search "Release ${{ env.RELEASE_VERSION }}" --json number --jq '.[0].number')
         COMMENT="\

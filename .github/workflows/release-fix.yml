@@ -11,9 +11,14 @@ jobs:
   fix:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
-        ref: releases/${{ github.event.inputs.release_version }}
+        fetch-depth: 0      
+        fetch-tags: true     
+    - name: Fetch full history to access previous commits/tags
+      run: |
+        git fetch --no-tags
+        git fetch origin '+refs/tags/*:refs/tags/*'
     - name: Use Node.js 22
       uses: actions/setup-node@v2
       with:
@@ -44,4 +49,18 @@ jobs:
         RELEASE_VERSION: ${{ github.event.inputs.release_version }}
         FIX_NUMBER: ${{ github.run_number }}
       run: |
-        gh issue comment "Release ${{ env.RELEASE_VERSION }}" --body "Fix ${{ env.FIX_NUMBER }} applied"
+        # Убедиться, что есть полный git history с тегами
+        git fetch --tags
+        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^)
+        COMMITS=$(git log $PREV_TAG..HEAD --pretty=format:'- %h %s' --no-merges)
+        AUTHOR=${{ github.actor }}
+        DATE=$(git log -1 --pretty=format:'%ad' --date=iso)
+        ISSUE=$(gh issue list --search "Release ${{ env.RELEASE_VERSION }}" --json number --jq '.[0].number')
+        COMMENT="\
+        Fix #${{ env.FIX_NUMBER }} applied  
+        **Date:** $DATE  
+        **Author:** $AUTHOR  
+        
+        **Commits since $PREV_TAG:**  
+        $COMMITS"
+            gh issue comment $ISSUE --body "$COMMENT"

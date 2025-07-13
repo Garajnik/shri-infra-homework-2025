@@ -33,14 +33,12 @@ jobs:
         RELEASE_VERSION: ${{ github.event.inputs.release_version }}
         FIX_NUMBER: ${{ github.run_number }}
       run: |
-        docker tag shri-infra cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION_fix$FIX_NUMBER
-        docker tag shri-infra cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION_latest
-        docker push cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION_fix$FIX_NUMBER
-        docker push cr.yandex/$CR_REGISTRY/app:$RELEASE_VERSION_latest
+        docker push cr.yandex/${{ env.CR_REGISTRY }}/app:${{ env.RELEASE_VERSION }}_fix${{ env.FIX_NUMBER }}
+        docker push cr.yandex/${{ env.CR_REGISTRY }}/app:${{ env.RELEASE_VERSION }}_latest
     - name: Add comment to Issue
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         RELEASE_VERSION: ${{ github.event.inputs.release_version }}
         FIX_NUMBER: ${{ github.run_number }}
       run: |
-        gh issue comment "Release $RELEASE_VERSION" --body "Fix $FIX_NUMBER applied"
+        gh issue comment "Release ${{ env.RELEASE_VERSION }}" --body "Fix ${{ env.FIX_NUMBER }} applied"

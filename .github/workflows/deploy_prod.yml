@@ -10,6 +10,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Login to Yandex CR
+        env:
+          YC_OAUTH_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
+        run: |
+          echo "${YC_OAUTH_TOKEN}" | docker login --username oauth --password-stdin cr.yandex
       - name: Check image exists
         run: docker pull cr.yandex/${{ secrets.YC_CR_REGISTRY_ID }}/app:${{ github.event.inputs.version }}_latest
 
